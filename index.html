@@ -105,21 +105,21 @@
                 gap: 20px; 
                 position: absolute; left: 0; top: 0; width: 100%; 
             }
-.print-card {
-    border: 3px solid #f97316; /* Garis sedikit diperkecil dari 4px ke 3px */
-    border-radius: 25px;       /* Lengkungan disesuaikan agar proporsional */
-    padding: 15px;             /* Padding dipersempit */
-    text-align: center;
-    width: 240px;              /* Diperkecil lagi dari 300px ke 240px */
-    height: 120px;             /* Diperkecil lagi dari 160px ke 120px */
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    page-break-inside: avoid;
-    margin: 5px auto;          /* Jarak antar kartu dipersempit */
-    background: white !important;
-}
+            .print-card {
+                border: 3px solid #f97316; 
+                border-radius: 25px;       
+                padding: 15px;             
+                text-align: center;
+                width: 240px;              
+                height: 120px;             
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                page-break-inside: avoid;
+                margin: 5px auto;          
+                background: white !important;
+            }
             .print-card h1 { 
                 font-family: 'Inter', sans-serif; 
                 font-size: 10pt; font-weight: 900; color: black; 
@@ -267,6 +267,16 @@
         let tvInterval = null;
         const MAX_PASIEN_TV = 4;
 
+        // --- NEW: PROMKES SETTINGS ---
+        let isShowingMedia = false;
+        let mediaIndex = 0;
+        const mediaPromkes = [
+            { type: 'image', url: 'https://i.ibb.co.com/hR4wCYJW/1777552840436.jpg' }, //
+            { type: 'image', url: 'https://i.ibb.co.com/bM5J0GH1/Brimston.png' }, //
+            { type: 'image', url: 'https://i.ibb.co.com/Q33n97zB/vvip.png' }, //Contoh Gambar Edukasi
+            { type: 'video', url: 'https://www.w3schools.com/html/mov_bbb.mp' } // Contoh Video Edukasi
+        ];
+
         function initDataSync() {
             if (!window.dbOnValue) { setTimeout(initDataSync, 500); return; }
 
@@ -321,6 +331,19 @@
             else if (bor > 50) borEl.className = "text-3xl font-header font-bold text-orange-400 leading-none";
             else borEl.className = "text-3xl font-header font-bold text-emerald-400 leading-none";
 
+            // LOGIKA TV MODE DENGAN PROMKES
+            if (isTVMode && isShowingMedia) {
+                const media = mediaPromkes[mediaIndex];
+                let mediaHtml = '';
+                if (media.type === 'image') {
+                    mediaHtml = `<img src="${media.url}" class="w-full h-full object-contain rounded-[3rem] shadow-2xl animate-fade-in">`;
+                } else {
+                    mediaHtml = `<video src="${media.url}" autoplay muted loop class="w-full h-full object-cover rounded-[3rem] shadow-2xl"></video>`;
+                }
+                container.innerHTML = `<div class="col-span-full h-[80vh] flex justify-center items-center">${mediaHtml}</div>`;
+                return;
+            }
+
             let displayData = [...databasePasien].sort((a, b) => masterRuangan.indexOf(a.ruang) - masterRuangan.indexOf(b.ruang));
 
             if (isTVMode && displayData.length > MAX_PASIEN_TV) {
@@ -372,18 +395,12 @@
         function cetakSemuaKartu() {
             const area = document.getElementById('print-area');
             area.innerHTML = '';
-            
             if(databasePasien.length === 0) { alert("Tidak ada data pasien."); return; }
-
             const sorted = [...databasePasien].sort((a, b) => masterRuangan.indexOf(a.ruang) - masterRuangan.indexOf(b.ruang));
-            
             sorted.forEach(p => {
                 const card = document.createElement('div');
                 card.className = 'print-card';
-                card.innerHTML = `
-                    <h1>${p.nama} / ${p.umur} THN</h1>
-                    <h2>${p.ruang}</h2>
-                `;
+                card.innerHTML = `<h1>${p.nama} / ${p.umur} THN</h1><h2>${p.ruang}</h2>`;
                 area.appendChild(card);
             });
             window.print();
@@ -514,6 +531,9 @@
         function toggleTVMode() {
             isTVMode = !isTVMode;
             tvPageIndex = 0;
+            mediaIndex = 0;
+            isShowingMedia = false;
+
             if (tvInterval) clearInterval(tvInterval);
 
             const grid = document.getElementById('grid-pasien');
@@ -523,11 +543,28 @@
             if (isTVMode) {
                 tvInterval = setInterval(() => {
                     const totalPages = Math.ceil(databasePasien.length / MAX_PASIEN_TV);
-                    if (totalPages > 1) {
-                        tvPageIndex = (tvPageIndex + 1) % totalPages;
-                        renderGrid();
+                    
+                    if (!isShowingMedia) {
+                        // Fase Pasien
+                        if (tvPageIndex < totalPages - 1) {
+                            tvPageIndex++;
+                        } else {
+                            // Pindah ke media jika halaman pasien habis
+                            isShowingMedia = true;
+                            tvPageIndex = 0;
+                        }
+                    } else {
+                        // Fase Media
+                        if (mediaIndex < mediaPromkes.length - 1) {
+                            mediaIndex++;
+                        } else {
+                            // Kembali ke pasien jika media habis
+                            isShowingMedia = false;
+                            mediaIndex = 0;
+                        }
                     }
-                }, 10000);
+                    renderGrid();
+                }, 10000); // Rotasi setiap 10 detik
 
                 sidebar.classList.add('hidden');
                 header.classList.add('hidden');
@@ -547,68 +584,11 @@
                 document.getElementById('tv-marquee').style.display = 'none';
                 document.body.style.padding = '1.5rem';
                 grid.classList.remove('grid-cols-2', 'h-[calc(100vh-100px)]', 'gap-4', 'p-4');
-                grid.classList.add('lg:grid-cols-3', 'grid-cols-2');
-                document.getElementById('exit-tv')?.remove(); 
+                grid.classList.add('grid-cols-2', 'lg:grid-cols-3');
+                const btn = document.getElementById('exit-tv');
+                if(btn) btn.remove();
             }
             renderGrid();
-        }
-
-        function openKalkulator() {
-            document.getElementById('popup-title').innerText = "Drug Calculator";
-            document.getElementById('modal-content').innerHTML = `
-                <div class="space-y-4">
-                    <label>Dosis Diminta (mg/mcg)</label>
-                    <input type="number" id="calc-d" class="w-full p-4 rounded-xl font-bold" oninput="doCalc()">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label>Sediaan Tersedia</label>
-                            <input type="number" id="calc-t" class="w-full p-4 rounded-xl font-bold" oninput="doCalc()">
-                        </div>
-                        <div>
-                            <label>Volume (ml)</label>
-                            <input type="number" id="calc-i" class="w-full p-4 rounded-xl font-bold" oninput="doCalc()">
-                        </div>
-                    </div>
-                    <div class="p-8 bg-emerald-500/10 rounded-3xl text-center border border-emerald-500/30 mt-6">
-                        <p class="text-[10px] text-emerald-400 font-black tracking-widest mb-2 uppercase">Hasil Ambilan:</p>
-                        <h2 id="calc-res" class="text-5xl font-header font-black text-emerald-400">0 ml</h2>
-                    </div>
-                </div>`;
-            openPopup();
-        }
-
-        function doCalc() {
-            const d = parseFloat(document.getElementById('calc-d').value) || 0, 
-                  t = parseFloat(document.getElementById('calc-t').value) || 0, 
-                  i = parseFloat(document.getElementById('calc-i').value) || 0;
-            const res = t > 0 ? (d/t)*i : 0;
-            document.getElementById('calc-res').innerText = (res % 1 === 0 ? res : res.toFixed(2)) + " ml";
-        }
-
-        function kirimLaporanWA() {
-            let text = `*LAPORAN VVIP BHARA DAKSA*%0A📆 ${new Date().toLocaleDateString('id-ID', {weekday:'long', day:'numeric', month:'long'})}%0A---------------------------------------%0A`;
-            masterRuangan.forEach((ruang, index) => {
-                const p = databasePasien.find(pasien => pasien.ruang === ruang);
-                text += `${index + 1}. ${ruang}: ${p ? `*${p.nama.toUpperCase()}* (${p.penjamin})` : '_KOSONG_'}%0A`;
-            });
-            window.open(`https://wa.me/?text=${text}`, '_blank');
-        }
-
-        function openRunningTextEditor() {
-            document.getElementById('popup-title').innerText = "Marquee Setting";
-            let html = `<div class="space-y-4">
-                <textarea id="new-text" class="w-full h-32 p-4 rounded-xl" placeholder="Ketik pengumuman..."></textarea>
-                <input type="number" id="new-speed" class="w-full p-4 rounded-xl" placeholder="Kecepatan (detik)">
-                <button onclick="saveMarquee()" class="w-full py-4 bg-slate-600 rounded-xl font-bold">UPDATE TEXT</button>
-            </div>`;
-            document.getElementById('modal-content').innerHTML = html; openPopup();
-        }
-
-        function saveMarquee() {
-            const t = document.getElementById('new-text').value;
-            const s = document.getElementById('new-speed').value;
-            window.dbUpdate(window.dbRef(window.db, 'settings/runningTextConfig'), { text: t, speed: s });
-            closePopup();
         }
     </script>
 </body>
